@@ -1,0 +1,60 @@
+- name: install wireguard
+  apt:
+   name: wireguard
+   state: present
+
+- ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+
+- name: gen wireguard keys
+  shell: cd /etc/wireguard && wg genkey | tee privatekey | wg pubkey > publickey
+
+- name: get privatekey
+  shell: cat /etc/wireguard/privatekey
+  register: privatekey
+
+- name: get publickey
+  shell: cat /etc/wireguard/publickey
+  register: publickey
+
+- set_fact:
+    privatekey: "{{ privatekey.stdout }}"
+    publickey: "{{ publickey.stdout }}"
+
+- name: create wireguard client dir
+  file:
+    name: /etc/wireguard/client
+    state: directory
+
+- name: gen wireguard client keys
+  shell: cd /etc/wireguard/client && wg genkey | tee privatekey | wg pubkey > publickey
+
+- name: get privatekey
+  shell: cat /etc/wireguard/client/privatekey
+  register: client_privatekey
+
+- name: get publickey
+  shell: cat /etc/wireguard/client/publickey
+  register: client_publickey
+
+- set_fact:
+    client_privatekey: "{{ client_privatekey.stdout }}"
+    client_publickey: "{{ client_publickey.stdout }}"
+
+- name: copy wg0.conf
+  template:
+    src: wg0.conf
+    dest: /etc/wireguard/wg0.conf
+
+- name: create local wireguard config
+  template:
+    src: client.conf
+    dest: client.conf
+  delegate_to: localhost
+
+- name: restart wireguard
+  ansible.builtin.systemd:
+    name: wg-quick@wg0
+    state: restarted
